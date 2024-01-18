@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from playwright.sync_api import sync_playwright
+from playwright.async_api import async_playwright
 from shot_scraper.cli import take_shot
 
 
@@ -9,48 +9,38 @@ app = FastAPI()
 
 browser_instance = None
 
-def initialize_browser():
+async def initialize_browser():
     global browser_instance
-    try:
-        print('before p')
-        p = sync_playwright().start()
-        print('p start')
-        browser_instance = p.chromium.launch()
-        return browser_instance
-    except Exception as e:
-        print(f"Error initializing browser: {e}")
+    p = await async_playwright().start()
+    browser_instance = await p.chromium.launch()
 
-def get_browser():
+async def get_browser():
     global browser_instance
-    if browser_instance is not None:
-        return browser_instance
-    else:
-        print('returning browser')
-        return initialize_browser()
+    if browser_instance is None:
+        await initialize_browser()
+    return browser_instance
 
+
+@app.get('/api/ss/{url}')
+async def main(url):
+    global browser_instance
+    browser_instance = await get_browser()
+    context = await browser_instance.new_context()
+    
+
+
+    shot = {'url': url}
+
+    await take_shot(shot=shot, context_or_page=context)
+
+    await context.close()
+
+    return {'msg':'ss saved'}
+
+
+    
 @app.get('/api/ss')
 def hello_world():
     return {'hello': 'world'}
-
-@app.get('/api/ss/{url}')
-def save_screenshot(url):
-    browser = get_browser()
-    context = browser.new_context()
-
-    print('working')
-
-    shot = {
-    'url' : url
-    }
-
-    take_shot(shot=shot, context_or_page=context)
-
-    context.close()
-
-    return {'ss':'saved'}
-
-
-    
-    
 
 

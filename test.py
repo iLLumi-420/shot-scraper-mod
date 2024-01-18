@@ -18,7 +18,8 @@ browser_instance = get_browser()
 page = browser_instance.new_context()
 
 shot = {
-    'url' : 'www.facebook.com'
+    'url' : 'www.facebook.com',
+    'output': '~/Desktop/ss'
 }
 
 take_shot(shot=shot, context_or_page=page)
