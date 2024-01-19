@@ -1,6 +1,8 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
+from starlette.responses import FileResponse, HTMLResponse
 from playwright.async_api import async_playwright
 from shot_scraper.cli import take_shot
+import os
 
 
 router = APIRouter()
@@ -36,5 +38,28 @@ async def main(url):
 
     await context.close()
 
-    return {'msg':response}
+    return HTMLResponse(content=f'<p>{response}<p><br><a href="download/{url}">Download Image</a>')
+
+@router.get('/download/{url}')
+def download_screenshot(url):
+
+    screenshots_dir = os.path.abspath('./static/screenshots')
+
+    ss_path = os.path.join(screenshots_dir, f'{url}.png')
+
+    print(ss_path)
+
+    if os.path.exists(ss_path):
+        return FileResponse(
+            path=ss_path,
+            media_type="image/png",
+            headers={
+                "Content-Disposition": f"attachment; filename={url}.png",
+                "Cache-Control": "no-cache",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            },
+        )
+    else:
+        raise HTTPException(status_code=404, detail="Screenshot not found")
 
