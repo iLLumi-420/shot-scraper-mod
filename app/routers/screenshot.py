@@ -1,5 +1,5 @@
-from fastapi import APIRouter, HTTPException
-from starlette.responses import FileResponse, HTMLResponse
+from fastapi import APIRouter, HTTPException, Request
+from starlette.responses import FileResponse
 from playwright.async_api import async_playwright
 from shot_scraper.cli import take_shot
 import os
@@ -25,7 +25,7 @@ def hello_world():
     return {'hello': 'world'}
 
 @router.get('/{url}')
-async def main(url):
+async def main(url, request: Request):
     global browser_instance
     browser_instance = await get_browser()
     context = await browser_instance.new_context()
@@ -35,10 +35,16 @@ async def main(url):
     shot = {'url': url, 'output':f'./static/screenshots/{url}.png'}
 
     response = await take_shot(shot=shot, context_or_page=context)
+    download_url = request.base_url.replace(path=f"api/screenshot/download/{url}")
 
     await context.close()
 
-    return HTMLResponse(content=f'<p>{response}<p><br><a href="download/{url}">Download Image</a>')
+
+    return {
+        'msg': response,
+        'download_url': download_url
+    }
+
 
 @router.get('/download/{url}')
 def download_screenshot(url):
