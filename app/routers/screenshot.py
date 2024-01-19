@@ -1,11 +1,9 @@
-from fastapi import FastAPI
+from fastapi import APIRouter
 from playwright.async_api import async_playwright
 from shot_scraper.cli import take_shot
 
 
-
-app = FastAPI()
-
+router = APIRouter()
 
 browser_instance = None
 
@@ -20,8 +18,11 @@ async def get_browser():
         await initialize_browser()
     return browser_instance
 
+@router.get('/')
+def hello_world():
+    return {'hello': 'world'}
 
-@app.get('/api/ss/{url}')
+@router.get('/{url}')
 async def main(url):
     global browser_instance
     browser_instance = await get_browser()
@@ -29,18 +30,11 @@ async def main(url):
     
 
 
-    shot = {'url': url}
+    shot = {'url': url, 'output':f'./static/screenshots/{url}.png'}
 
     await take_shot(shot=shot, context_or_page=context)
 
     await context.close()
 
-    return {'msg':'ss saved'}
-
-
-    
-@app.get('/api/ss')
-def hello_world():
-    return {'hello': 'world'}
-
+    return {'msg':'saved'}
 
