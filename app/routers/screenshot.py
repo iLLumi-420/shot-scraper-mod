@@ -32,9 +32,9 @@ async def main(url):
 
     shot = {'url': url, 'output':f'./static/screenshots/{url}.png'}
 
-    await take_shot(shot=shot, context_or_page=context)
+    response = await take_shot(shot=shot, context_or_page=context)
 
     await context.close()
 
-    return {'msg':'saved'}
+    return {'msg':response}
 
