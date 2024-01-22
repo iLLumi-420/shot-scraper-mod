@@ -3,11 +3,19 @@ from starlette.responses import FileResponse
 from playwright.async_api import async_playwright
 from shot_scraper.cli import take_shot
 import os
+from contextlib import asynccontextmanager
 
 
-router = APIRouter()
+
+
 
 browser_instance = None
+
+@asynccontextmanager
+def lifespan(app: APIRouter):
+    initialize_browser()
+    yield
+    browser_instance.close()
 
 async def initialize_browser():
     global browser_instance
@@ -19,6 +27,10 @@ async def get_browser():
     if browser_instance is None:
         await initialize_browser()
     return browser_instance
+
+
+router = APIRouter(lifespan=lifespan)
+
 
 @router.get('/')
 def hello_world():
