@@ -87,7 +87,7 @@ def download_screenshot(url: str):
         raise HTTPException(status_code=404, detail="Screenshot not found")
     
 
-async def process_bulk_screenshot(req, urls: list[str], background_task=BackgroundTasks):
+async def process_bulk_screenshot(req, urls: List[str], background_task=BackgroundTasks):
     results = []
     for url in urls:
         
