@@ -14,11 +14,7 @@ class ScreenshotRequest(BaseModel):
 
 redis = Redis(host='localhost', port='6379', db=0)
 
-
 screenshots_dir = os.path.abspath('./static/screenshots')
-
-
-
 browser_instance = None
 
 @asynccontextmanager
@@ -64,7 +60,9 @@ async def main(url: str, request: Request):
     download_url = request.base_url.replace(path=f"api/screenshot/download/{url}")
 
     if not os.path.exists(screenshot_path):
+        redis.set(url, 1)
         response = await take_screenshot(url)
+        redis.delete(url)
 
     return {
         'download_url': download_url
@@ -91,7 +89,7 @@ def download_screenshot(url: str):
         raise HTTPException(status_code=404, detail="Screenshot not found")
     
 
-async def process_bulk_screenshot(req, urls: List[str], background_task=BackgroundTasks):
+async def process_bulk_screenshot(urls: List[str], background_task=BackgroundTasks):
     results = []
     for url in urls:
         
@@ -110,7 +108,7 @@ async def bluk_screenshot(request: ScreenshotRequest, background_task: Backgroun
     if not urls:
         raise HTTPException(status_code=400, detail="No urls received")
     
-    results = await process_bulk_screenshot(request ,urls, background_task)
+    results = await process_bulk_screenshot(urls, background_task)
 
     return {
         "results": results,
