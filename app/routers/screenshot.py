@@ -4,6 +4,11 @@ from playwright.async_api import async_playwright
 from shot_scraper.cli import take_shot
 import os
 from contextlib import asynccontextmanager
+from pydantic import BaseModel
+
+
+class ScreenshotRequest(BaseModel):
+    urls: list[str]
 
 
 
@@ -85,21 +90,21 @@ async def process_bulk_screenshot(urls: list[str], background_task=BackgroundTas
     results = []
     for url in urls:
         background_task.add_task(take_screenshot, url)
-        results.append({"msg": f'for url {url}'})
+        results.append({"msg": f'screenshot for url {url} is being taken'})
 
     return results
 
 @router.post('/bulk')
-async def bluk_screenshot(request: Request, background_task: BackgroundTasks):
-    urls = request.urls
+async def bluk_screenshot(request: ScreenshotRequest, background_task: BackgroundTasks):
 
-    print(urls)
+    urls = request.urls
 
     if not urls:
         raise HTTPException(status_code=400, detail="No urls received")
     
     results = await process_bulk_screenshot(urls, background_task)
 
-    response_message = {"message": "All screenshots have been taken.", "results": results}
-    return response_message
+    return {
+        "results": results
+    }
 
