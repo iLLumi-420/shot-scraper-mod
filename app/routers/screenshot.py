@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, BackgroundTasks
 from starlette.responses import FileResponse
 from playwright.async_api import async_playwright
 from shot_scraper.cli import take_shot
@@ -32,25 +32,24 @@ async def get_browser():
 router = APIRouter(lifespan=lifespan)
 
 
-@router.get('/')
-def hello_world():
-    return {'hello': 'world'}
-
-@router.get('/{url}')
-async def main(url, request: Request):
+async def take_screenshot(url):
     global browser_instance
     browser_instance = await get_browser()
     context = await browser_instance.new_context()
-    
-
 
     shot = {'url': url, 'output':f'./static/screenshots/{url}.png'}
 
     response = await take_shot(shot=shot, context_or_page=context)
+    await context.close()
+    return response
+    
+
+@router.get('/{url}')
+async def main(url: str, request: Request):
+    
     download_url = request.base_url.replace(path=f"api/screenshot/download/{url}")
 
-    await context.close()
-
+    response = await take_screenshot(url)
 
     return {
         'msg': response,
@@ -59,7 +58,7 @@ async def main(url, request: Request):
 
 
 @router.get('/download/{url}')
-def download_screenshot(url):
+def download_screenshot(url: str):
 
     screenshots_dir = os.path.abspath('./static/screenshots')
 
@@ -80,4 +79,27 @@ def download_screenshot(url):
         )
     else:
         raise HTTPException(status_code=404, detail="Screenshot not found")
+    
+
+async def process_bulk_screenshot(urls: list[str], background_task=BackgroundTasks):
+    results = []
+    for url in urls:
+        background_task.add_task(take_screenshot, url)
+        results.append({"msg": f'for url {url}'})
+
+    return results
+
+@router.post('/bulk')
+async def bluk_screenshot(request: Request, background_task: BackgroundTasks):
+    urls = request.urls
+
+    print(urls)
+
+    if not urls:
+        raise HTTPException(status_code=400, detail="No urls received")
+    
+    results = await process_bulk_screenshot(urls, background_task)
+
+    response_message = {"message": "All screenshots have been taken.", "results": results}
+    return response_message
 
