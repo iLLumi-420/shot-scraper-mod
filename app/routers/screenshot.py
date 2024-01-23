@@ -5,10 +5,11 @@ from shot_scraper.cli import take_shot
 import os
 from contextlib import asynccontextmanager
 from pydantic import BaseModel
+from typing import List
 
 
 class ScreenshotRequest(BaseModel):
-    urls: list[str]
+    urls: List[str]
 
 
 
