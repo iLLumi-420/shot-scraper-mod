@@ -6,12 +6,16 @@ import os
 from contextlib import asynccontextmanager
 from pydantic import BaseModel
 from typing import List
+from redis import Redis
 
 
 class ScreenshotRequest(BaseModel):
     urls: List[str]
 
+redis = Redis(host='localhost', port='6379', db=0)
 
+
+screenshots_dir = os.path.abspath('./static/screenshots')
 
 
 
@@ -45,20 +49,24 @@ async def take_screenshot(url):
 
     shot = {'url': url, 'output':f'./static/screenshots/{url}.png'}
 
-    response = await take_shot(shot=shot, context_or_page=context)
-    await context.close()
-    return response
+    try:
+        response = await take_shot(shot=shot, context_or_page=context)
+        await context.close()
+        return response
+    except Exception as e:
+        print('Error in taking shot', e)
     
 
 @router.get('/{url}')
 async def main(url: str, request: Request):
     
+    screenshot_path = os.path.join(screenshots_dir, f'{url}.png')
     download_url = request.base_url.replace(path=f"api/screenshot/download/{url}")
 
-    response = await take_screenshot(url)
+    if not os.path.exists(screenshot_path):
+        response = await take_screenshot(url)
 
     return {
-        'msg': response,
         'download_url': download_url
     }
 
@@ -66,15 +74,11 @@ async def main(url: str, request: Request):
 @router.get('/download/{url}')
 def download_screenshot(url: str):
 
-    screenshots_dir = os.path.abspath('./static/screenshots')
+    screenshot_path = os.path.join(screenshots_dir, f'{url}.png')
 
-    ss_path = os.path.join(screenshots_dir, f'{url}.png')
-
-    print(ss_path)
-
-    if os.path.exists(ss_path):
+    if os.path.exists(screenshot_path):
         return FileResponse(
-            path=ss_path,
+            path=screenshot_path,
             media_type="image/png",
             headers={
                 "Content-Disposition": f"attachment; filename={url}.png",
