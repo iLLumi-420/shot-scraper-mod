@@ -86,25 +86,29 @@ def download_screenshot(url: str):
         raise HTTPException(status_code=404, detail="Screenshot not found")
     
 
-async def process_bulk_screenshot(urls: list[str], background_task=BackgroundTasks):
+async def process_bulk_screenshot(req, urls: list[str], background_task=BackgroundTasks):
     results = []
     for url in urls:
+        
         background_task.add_task(take_screenshot, url)
         results.append({"msg": f'screenshot for url {url} is being taken'})
 
     return results
 
 @router.post('/bulk')
-async def bluk_screenshot(request: ScreenshotRequest, background_task: BackgroundTasks):
+async def bluk_screenshot(request: ScreenshotRequest, background_task: BackgroundTasks, req:Request):
 
     urls = request.urls
+
+    download_url = req.base_url.replace(path="api/screenshot/download/{url}")
 
     if not urls:
         raise HTTPException(status_code=400, detail="No urls received")
     
-    results = await process_bulk_screenshot(urls, background_task)
+    results = await process_bulk_screenshot(request ,urls, background_task)
 
     return {
-        "results": results
+        "results": results,
+        "download_url" : download_url
     }
 
