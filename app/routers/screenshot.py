@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from pydantic import BaseModel
 from typing import List
 from redis import Redis
+import asyncio
 
 
 class ScreenshotRequest(BaseModel):
@@ -46,7 +47,10 @@ async def take_screenshot(url):
     shot = {'url': url, 'output':f'./static/screenshots/{url}.png'}
 
     try:
+        redis.set(url, 1)
+        await asyncio.sleep(20)
         response = await take_shot(shot=shot, context_or_page=context)
+        redis.delete(url)
         await context.close()
         return response
     except Exception as e:
@@ -115,3 +119,14 @@ async def bluk_screenshot(request: ScreenshotRequest, background_task: Backgroun
         "download_url" : download_url
     }
 
+@router.get('/status/{url}')
+def check_status(url):
+    status = redis.get(url)
+    if status:
+        status = status.decode('utf-8')
+        if status == '1':
+            return {'msg': 'SS still not taken'}
+        else:
+            return {'status': status}
+    else:
+        return {'no':'status'}
