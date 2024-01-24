@@ -50,7 +50,6 @@ async def take_screenshot(url):
 
     try:
         redis.set(url, 1)
-        await asyncio.sleep(20)
         response = await take_shot(shot=shot, context_or_page=context)
         redis.delete(url)
         await context.close()
@@ -66,9 +65,8 @@ async def main(url: str, request: Request):
     download_url = request.base_url.replace(path=f"api/download/{url}")
 
     if not os.path.exists(screenshot_path):
-        redis.set(url, 1)
         response = await take_screenshot(url)
-        redis.delete(url)
+
 
     return {
         'download_url': download_url
@@ -95,12 +93,12 @@ def download_screenshot(url: str):
         raise HTTPException(status_code=404, detail="Screenshot not found")
     
 
-async def process_bulk_screenshot(urls: List[str], background_task=BackgroundTasks):
+async def process_bulk_screenshot( req,urls: List[str], background_task=BackgroundTasks):
     results = []
     for url in urls:
-        
+        download_url = req.base_url.replace(path=f"api/screenshot/download/{url}")
         background_task.add_task(take_screenshot, url)
-        results.append({"msg": f'screenshot for url {url} is being taken'})
+        results.append({"msg": f'screenshot for url {url} is being taken', "download_info":f"After completion you can download it from {download_url}"})
 
     return results
 
@@ -109,23 +107,21 @@ async def bluk_screenshot(request: ScreenshotRequest, background_task: Backgroun
 
     urls = request.urls
 
-    download_url = req.base_url.replace(path="api/screenshot/download/{url}")
 
     if not urls:
         raise HTTPException(status_code=400, detail="No urls received")
     
-    results = await process_bulk_screenshot(urls, background_task)
+    results = await process_bulk_screenshot(req, urls, background_task)
 
-    return {
-        "results": results,
-        "download_url" : download_url
-    }
+    return results
 
 @router.get('/status/{url}')
 def check_status(url, req: Request):
 
     status = redis.get(url)
-    
+
+    print(status)
+
     screenshot_path = os.path.join(screenshots_dir, f'{url}.png')
     download_url = req.base_url.replace(path=f"api/screenshot/download/{url}")
 
@@ -133,7 +129,7 @@ def check_status(url, req: Request):
         if os.path.exists(screenshot_path):
             return {
                 'msg': f'The URL:{url} has already been processed',
-                'download_url': download_url
+                'download_url': f'{download_url}'
             }
         else:
             return {'msg': 'URL has never been processed'}
