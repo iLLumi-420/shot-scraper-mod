@@ -69,7 +69,7 @@ async def main(url: str, request: Request):
 
 
     return {
-        'download_url': download_url
+        'download_url': f'{download_url}'
     }
 
 
