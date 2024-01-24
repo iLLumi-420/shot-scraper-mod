@@ -1,5 +1,6 @@
 annotated-types==0.6.0
 anyio==4.2.0
+async-timeout==4.0.3
 certifi==2023.11.17
 charset-normalizer==3.3.2
 click==8.1.7
@@ -18,6 +19,7 @@ pydantic_core==2.14.6
 pyee==11.0.1
 python-dotenv==1.0.0
 PyYAML==6.0.1
+redis==5.0.1
 requests==2.31.0
 shot-scraper @ git+https://github.com/iLLumi-420/shot-scraper.git@d59a9c646f305f8b01326511d8e8f3446df0c6e4
 sniffio==1.3.0
