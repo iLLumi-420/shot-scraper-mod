@@ -1,6 +1,6 @@
 import requests
 
-url = "http://localhost:8000/api/screenshot/bulk"
+url = "http://localhost:8000/api/bulk/screenshots"
 
 data = {
     'urls' : ['www.facebook.com', 'www.example1.com', 'www.instagram.com', 'www.example.com']

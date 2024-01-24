@@ -18,6 +18,8 @@ redis = Redis(host='localhost', port='6379', db=0)
 screenshots_dir = os.path.abspath('./static/screenshots')
 browser_instance = None
 
+
+
 @asynccontextmanager
 def lifespan(app: APIRouter):
     initialize_browser()
@@ -57,11 +59,11 @@ async def take_screenshot(url):
         print('Error in taking shot', e)
     
 
-@router.get('/{url}')
+@router.get('/screenshot/{url}')
 async def main(url: str, request: Request):
     
     screenshot_path = os.path.join(screenshots_dir, f'{url}.png')
-    download_url = request.base_url.replace(path=f"api/screenshot/download/{url}")
+    download_url = request.base_url.replace(path=f"api/download/{url}")
 
     if not os.path.exists(screenshot_path):
         redis.set(url, 1)
@@ -102,7 +104,7 @@ async def process_bulk_screenshot(urls: List[str], background_task=BackgroundTas
 
     return results
 
-@router.post('/bulk')
+@router.post('/bulk/screenshots')
 async def bluk_screenshot(request: ScreenshotRequest, background_task: BackgroundTasks, req:Request):
 
     urls = request.urls
@@ -120,13 +122,20 @@ async def bluk_screenshot(request: ScreenshotRequest, background_task: Backgroun
     }
 
 @router.get('/status/{url}')
-def check_status(url):
+def check_status(url, req: Request):
+
     status = redis.get(url)
-    if status:
-        status = status.decode('utf-8')
-        if status == '1':
-            return {'msg': 'SS still not taken'}
+    
+    screenshot_path = os.path.join(screenshots_dir, f'{url}.png')
+    download_url = req.base_url.replace(path=f"api/screenshot/download/{url}")
+
+    if not status:
+        if os.path.exists(screenshot_path):
+            return {
+                'msg': f'The URL:{url} has already been processed',
+                'download_url': download_url
+            }
         else:
-            return {'status': status}
+            return {'msg': 'URL has never been processed'}
     else:
-        return {'no':'status'}
+        return {'msg': 'URL is being processed'}
