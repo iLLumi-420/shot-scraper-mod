@@ -42,20 +42,27 @@ router = APIRouter(lifespan=lifespan)
 
 
 async def take_screenshot(url):
-    global browser_instance
     browser_instance = await get_browser()
     context = await browser_instance.new_context()
 
     shot = {'url': url, 'output':f'./static/screenshots/{url}.png'}
 
     try:
+        url_count = int(redis.hget("black_list", url).decode('utf-8'))
+        if url_count > 2:
+            print("bad url")
         redis.set(url, 1)
-        response = await take_shot(shot=shot, context_or_page=context)
+        response = await take_shot(shot=shot, context_or_page=context, fail=True)
         redis.delete(url)
         await context.close()
         return response
+    
     except Exception as e:
         print('Error in taking shot', e)
+        if redis.hexists("black_list", url):
+            redis.hincrby("black_list", url, 1)
+        else:
+            redis.hset("black_list", url, 1)
     
 
 @router.get('/screenshot/{url}')
