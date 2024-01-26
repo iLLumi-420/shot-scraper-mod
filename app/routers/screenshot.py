@@ -27,15 +27,21 @@ def lifespan(app: APIRouter):
     browser_instance.close()
 
 async def initialize_browser():
-    global browser_instance
     p = await async_playwright().start()
     browser_instance = await p.chromium.launch()
 
 async def get_browser():
-    global browser_instance
     if browser_instance is None:
         await initialize_browser()
     return browser_instance
+
+async def check_bad_url(url):
+    url_bad_return_count = await int(redis.hget("black_list", url).decode('utf-8'))
+    if url_bad_return_count and url_bad_return_count > 3:
+        print(f'The url:{url} does not provide a status 200 result')
+        return True
+    else:
+        return False
 
 
 router = APIRouter(lifespan=lifespan)
@@ -48,9 +54,9 @@ async def take_screenshot(url):
     shot = {'url': url, 'output':f'./static/screenshots/{url}.png'}
 
     try:
-        url_count = int(redis.hget("black_list", url).decode('utf-8'))
-        if url_count > 2:
-            print("bad url")
+        is_bad_url = await check_bad_url(url)
+        if is_bad_url:
+            return {'msg': 'The url:{url} will contionously gives error and will not be tried anymore'}
         redis.set(url, 1)
         response = await take_shot(shot=shot, context_or_page=context, fail=True)
         redis.delete(url)
@@ -63,6 +69,7 @@ async def take_screenshot(url):
             redis.hincrby("black_list", url, 1)
         else:
             redis.hset("black_list", url, 1)
+        return 
     
 
 @router.get('/screenshot/{url}')
@@ -71,13 +78,26 @@ async def main(url: str, request: Request):
     screenshot_path = os.path.join(screenshots_dir, f'{url}.png')
     download_url = request.base_url.replace(path=f"api/download/{url}")
 
-    if not os.path.exists(screenshot_path):
-        response = await take_screenshot(url)
+    if os.path.exists(screenshot_path):
+        return {
+            'msg': f'Screenshot the url:{url} has aready been taken',
+            'download_url': f'{download_url}'
+        }
+    
+    response = await take_screenshot(url)
 
-
+    if response is None:
+        return {
+            'msg': 'Could not take screenshot for url:{url}'
+        }
     return {
-        'download_url': f'{download_url}'
-    }
+            'msg': 'Screenshot has been successfully taken',
+            'download_url': f'{download_url}'
+        }
+            
+
+
+    
 
 
 @router.get('/download/{url}')
@@ -103,6 +123,11 @@ def download_screenshot(url: str):
 async def process_bulk_screenshot( req,urls: List[str], background_task=BackgroundTasks):
     results = []
     for url in urls:
+
+        is_bad_url = check_bad_url(url)
+        if is_bad_url:
+            results.append({'msg': 'The url:{url} will contionously gives error and will not be tried anymore'})
+            continue
 
         screenshot_path = os.path.join(screenshots_dir, f'{url}.png')
         download_url = req.base_url.replace(path=f"api/screenshot/download/{url}")
