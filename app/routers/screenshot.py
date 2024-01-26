@@ -96,7 +96,16 @@ def download_screenshot(url: str):
 async def process_bulk_screenshot( req,urls: List[str], background_task=BackgroundTasks):
     results = []
     for url in urls:
+
+        screenshot_path = os.path.join(screenshots_dir, f'{url}.png')
         download_url = req.base_url.replace(path=f"api/screenshot/download/{url}")
+
+
+        if os.path.exists(screenshot_path):
+            results.append({"msg": f'screen shot for url: {url} has already been taken', 'download_url': f'{download_url}'})
+            continue
+
+
         background_task.add_task(take_screenshot, url)
         results.append({"msg": f'screenshot for url {url} is being taken', "download_info":f"After completion you can download it from {download_url}"})
 
