@@ -19,7 +19,6 @@ screenshots_dir = os.path.abspath('./static/screenshots')
 browser_instance = None
 
 
-
 @asynccontextmanager
 def lifespan(app: APIRouter):
     initialize_browser()
@@ -42,10 +41,8 @@ def check_bad_url(url):
     if not url_bad_return_count:
         return False
     url_bad_return_count = int(url_bad_return_count.decode('utf-8'))
-    if url_bad_return_count < 3:
+    if url_bad_return_count < 4:
         return False
-    print(url_bad_return_count)
-    print(f'The url:{url} does not provide a status 200 result')
     return True
 
 def get_hash(url):
@@ -55,7 +52,7 @@ def get_hash(url):
 
     hashed_string = hash_object.hexdigest()
 
-    return hashed_string[:12]
+    return hashed_string[:16]
 
 
 
