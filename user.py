@@ -1,9 +1,9 @@
 import requests
 
-url = "http://localhost:8000/api/bulk/screenshots"
+url = "http://localhost:8000/api/screenshots"
 
 data = {
-    'urls' : ['www.facebook.com', 'www.example1.com', 'www.instagram.com', 'www.example.com',]
+    'urls' : ['https://www.facebook.com/login','https://www.messenger.com/', 'www.example.com', 'example1.com', 'www.instagram.com']
 }
 
 response = requests.post(url, json=data)

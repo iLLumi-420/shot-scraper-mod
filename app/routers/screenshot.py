@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Request, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Request, BackgroundTasks, Path
 from starlette.responses import FileResponse
 from playwright.async_api import async_playwright
 from shot_scraper.cli import take_shot
@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from pydantic import BaseModel
 from typing import List
 from redis import Redis
-import asyncio
+import hashlib
 
 
 class ScreenshotRequest(BaseModel):
@@ -27,21 +27,36 @@ def lifespan(app: APIRouter):
     browser_instance.close()
 
 async def initialize_browser():
+    global browser_instance
     p = await async_playwright().start()
     browser_instance = await p.chromium.launch()
 
 async def get_browser():
+    global browser_instance
     if browser_instance is None:
         await initialize_browser()
     return browser_instance
 
-async def check_bad_url(url):
-    url_bad_return_count = await int(redis.hget("black_list", url).decode('utf-8'))
-    if url_bad_return_count and url_bad_return_count > 3:
-        print(f'The url:{url} does not provide a status 200 result')
-        return True
-    else:
+def check_bad_url(url):
+    url_bad_return_count = redis.hget("black_list", url)
+    if not url_bad_return_count:
         return False
+    url_bad_return_count = int(url_bad_return_count.decode('utf-8'))
+    if url_bad_return_count < 3:
+        return False
+    print(url_bad_return_count)
+    print(f'The url:{url} does not provide a status 200 result')
+    return True
+
+def get_hash(url):
+    hash_object = hashlib.sha256()
+
+    hash_object.update(url.encode('utf-8'))
+
+    hashed_string = hash_object.hexdigest()
+
+    return hashed_string[:12]
+
 
 
 router = APIRouter(lifespan=lifespan)
@@ -51,12 +66,11 @@ async def take_screenshot(url):
     browser_instance = await get_browser()
     context = await browser_instance.new_context()
 
-    shot = {'url': url, 'output':f'./static/screenshots/{url}.png'}
+    name = get_hash(url)
+
+    shot = {'url': url, 'output':f'./static/screenshots/{name}.png'}
 
     try:
-        is_bad_url = await check_bad_url(url)
-        if is_bad_url:
-            return {'msg': 'The url:{url} will contionously gives error and will not be tried anymore'}
         redis.set(url, 1)
         response = await take_shot(shot=shot, context_or_page=context, fail=True)
         redis.delete(url)
@@ -64,53 +78,63 @@ async def take_screenshot(url):
         return response
     
     except Exception as e:
-        print('Error in taking shot', e)
+        print('Error in taking shot for url',url, e)
         if redis.hexists("black_list", url):
             redis.hincrby("black_list", url, 1)
         else:
             redis.hset("black_list", url, 1)
         return 
+      
+
+async def process_screenshots(req,urls: List[str], background_task=BackgroundTasks):
+    results = []
+    for url in urls:
+
+        name = get_hash(url)
+
+        screenshot_path = os.path.join(screenshots_dir, f'{name}.png')
+        download_url = req.base_url.replace(path=f"api/download/{url}")
+
+        if os.path.exists(screenshot_path):
+            results.append({"msg": f'screen shot for url: {url} has already been taken', 'download_url': f'{download_url}'})
+            continue
+
+        is_bad_url = check_bad_url(url)
+        if is_bad_url:
+            results.append({'msg': f'The url:{url} will contionously gives error and will not be tried anymore'})
+            continue
+
+        background_task.add_task(take_screenshot, url)
+        results.append({"msg":f'screenshot for url {url} is being taken', "download_info":f"After completion you can download it from {download_url}"})
+
+    return results
+
+@router.post('/screenshots')
+async def bluk_screenshot(request: ScreenshotRequest, background_task: BackgroundTasks, req:Request):
+
+    urls = request.urls
+
+    if not urls:
+        raise HTTPException(status_code=400, detail="No urls received")
     
+    results = await process_screenshots(req, urls, background_task)
 
-@router.get('/screenshot/{url}')
-async def main(url: str, request: Request):
-    
-    screenshot_path = os.path.join(screenshots_dir, f'{url}.png')
-    download_url = request.base_url.replace(path=f"api/download/{url}")
+    return results
 
-    if os.path.exists(screenshot_path):
-        return {
-            'msg': f'Screenshot the url:{url} has aready been taken',
-            'download_url': f'{download_url}'
-        }
-    
-    response = await take_screenshot(url)
-
-    if response is None:
-        return {
-            'msg': 'Could not take screenshot for url:{url}'
-        }
-    return {
-            'msg': 'Screenshot has been successfully taken',
-            'download_url': f'{download_url}'
-        }
-            
-
-
-    
 
 
 @router.get('/download/{url}')
-def download_screenshot(url: str):
+def download_screenshot(url: str ):
 
-    screenshot_path = os.path.join(screenshots_dir, f'{url}.png')
+    name = get_hash(url)
+    screenshot_path = os.path.join(screenshots_dir, f'{name}.png')
 
     if os.path.exists(screenshot_path):
         return FileResponse(
             path=screenshot_path,
             media_type="image/png",
             headers={
-                "Content-Disposition": f"attachment; filename={url}.png",
+                "Content-Disposition": f"attachment; filename={name}.png",
                 "Cache-Control": "no-cache",
                 "Pragma": "no-cache",
                 "Expires": "0",
@@ -118,53 +142,16 @@ def download_screenshot(url: str):
         )
     else:
         raise HTTPException(status_code=404, detail="Screenshot not found")
-    
-
-async def process_bulk_screenshot( req,urls: List[str], background_task=BackgroundTasks):
-    results = []
-    for url in urls:
-
-        is_bad_url = check_bad_url(url)
-        if is_bad_url:
-            results.append({'msg': 'The url:{url} will contionously gives error and will not be tried anymore'})
-            continue
-
-        screenshot_path = os.path.join(screenshots_dir, f'{url}.png')
-        download_url = req.base_url.replace(path=f"api/screenshot/download/{url}")
-
-
-        if os.path.exists(screenshot_path):
-            results.append({"msg": f'screen shot for url: {url} has already been taken', 'download_url': f'{download_url}'})
-            continue
-
-
-        background_task.add_task(take_screenshot, url)
-        results.append({"msg": f'screenshot for url {url} is being taken', "download_info":f"After completion you can download it from {download_url}"})
-
-    return results
-
-@router.post('/bulk/screenshots')
-async def bluk_screenshot(request: ScreenshotRequest, background_task: BackgroundTasks, req:Request):
-
-    urls = request.urls
-
-
-    if not urls:
-        raise HTTPException(status_code=400, detail="No urls received")
-    
-    results = await process_bulk_screenshot(req, urls, background_task)
-
-    return results
 
 @router.get('/status/{url}')
 def check_status(url, req: Request):
 
     status = redis.get(url)
 
-    print(status)
+    name = get_hash(url)
 
-    screenshot_path = os.path.join(screenshots_dir, f'{url}.png')
-    download_url = req.base_url.replace(path=f"api/screenshot/download/{url}")
+    screenshot_path = os.path.join(screenshots_dir, f'{name}.png')
+    download_url = req.base_url.replace(path=f"api/download/{url}")
 
     if not status:
         if os.path.exists(screenshot_path):
