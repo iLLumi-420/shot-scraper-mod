@@ -143,8 +143,8 @@ def download_screenshot(url: str = Path(..., description="URL")):
     else:
         raise HTTPException(status_code=404, detail="Screenshot not found")
 
-@router.get('/status/{url}')
-def check_status(url, req: Request):
+@router.get('/status/{url:path}')
+def check_status(req: Request,url: str = Path(..., description="URL")):
 
     status = redis.get(url)
 
