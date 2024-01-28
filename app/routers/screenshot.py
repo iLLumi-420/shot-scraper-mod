@@ -123,8 +123,8 @@ async def bluk_screenshot(request: ScreenshotRequest, background_task: Backgroun
 
 
 
-@router.get('/download/{url}')
-def download_screenshot(url: str ):
+@router.get('/download/{url:path}')
+def download_screenshot(url: str = Path(..., description="URL")):
 
     name = get_hash(url)
     screenshot_path = os.path.join(screenshots_dir, f'{name}.png')
