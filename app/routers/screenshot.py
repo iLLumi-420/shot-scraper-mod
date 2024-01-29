@@ -94,16 +94,16 @@ async def process_screenshots(req,urls: List[str], background_task=BackgroundTas
         status_url = req.base_url.replace(path=f"api/status/{url}")
 
         if os.path.exists(screenshot_path):
-            results.append({"msg": f"screen shot for url: {url} has already been taken", "download_url": f"{download_url}","status": f"status of screenshot for the url: {url} can be checked at {status_url}"})
+            results.append({"msg": f"screen shot for url: {url} has already been taken", "download_url": f"{download_url}","status": f"download status of screenshot for the url: {url} can be checked at {status_url}"})
             continue
 
         is_bad_url = check_bad_url(url)
         if is_bad_url:
-            results.append({"msg": f"The url:{url} will contionously gives error and will not be tried anymore", "status": f"status of screenshot for the url: {url} can be checked at {status_url}"})
+            results.append({"msg": f"The url:{url} will contionously gives error and will not be tried anymore", "status": f"download status of screenshot for the url: {url} can be checked at {status_url}"})
             continue
 
         background_task.add_task(take_screenshot, url)
-        results.append( {"msg":f"screenshot for url {url} is being taken", "download_info": {"url":f"After completion you can download it from {download_url}", "status": f"status of screenshot for the url: {url} can be checked at {status_url}"}})
+        results.append( {"msg":f"screenshot for url {url} is being taken", "download_info": {"url":f"After completion you can download it from {download_url}", "status": f"download status of screenshot for the url: {url} can be checked at {status_url}"}})
 
     return results
 
