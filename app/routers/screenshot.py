@@ -54,7 +54,10 @@ def get_hash(url):
 
     return hashed_string[:16]
 
-
+def clean_url(url):
+    url = url.rstrip('/')
+    url = url.split('www.')[-1] if 'www.' in url else url
+    return url
 
 router = APIRouter(lifespan=lifespan)
 
@@ -86,24 +89,24 @@ async def take_screenshot(url):
 async def process_screenshots(req,urls: List[str], background_task=BackgroundTasks):
     results = []
     for url in urls:
-
+        
+        url = clean_url(url)
         name = get_hash(url)
 
         screenshot_path = os.path.join(screenshots_dir, f"{name}.png")
         download_url = req.base_url.replace(path=f"api/download/{url}")
-        status_url = req.base_url.replace(path=f"api/status/{url}")
 
         if os.path.exists(screenshot_path):
-            results.append({"msg": f"screen shot for url: {url} has already been taken", "download_url": f"{download_url}","status": f"download status of screenshot for the url: {url} can be checked at {status_url}"})
+            results.append({url: f'{download_url}'})
             continue
 
         is_bad_url = check_bad_url(url)
         if is_bad_url:
-            results.append({"msg": f"The url:{url} will contionously gives error and will not be tried anymore", "status": f"download status of screenshot for the url: {url} can be checked at {status_url}"})
+            results.append({url: 'Bad url'})
             continue
 
         background_task.add_task(take_screenshot, url)
-        results.append( {"msg":f"screenshot for url {url} is being taken", "download_info": {"url":f"After completion you can download it from {download_url}", "status": f"download status of screenshot for the url: {url} can be checked at {status_url}"}})
+        results.append({url: f'{download_url}'})
 
     return results
 
@@ -124,6 +127,7 @@ async def bluk_screenshot(request: ScreenshotRequest, background_task: Backgroun
 @router.get("/download/{url:path}")
 def download_screenshot(url: str = Path(..., description="URL")):
 
+    url = clean_url(url)
     name = get_hash(url)
     screenshot_path = os.path.join(screenshots_dir, f"{name}.png")
 
@@ -146,6 +150,7 @@ def check_status(req: Request,url: str = Path(..., description="URL")):
 
     status = redis.get(url)
 
+    url = clean_url(url)
     name = get_hash(url)
 
     screenshot_path = os.path.join(screenshots_dir, f"{name}.png")
@@ -154,7 +159,7 @@ def check_status(req: Request,url: str = Path(..., description="URL")):
     if not status:
         if os.path.exists(screenshot_path):
             return {
-                "msg": f"The URL:{url} has already been processed",
+                "msg": f"Screenshot for URL:{url} has already been taken",
                 "download_url": f"{download_url}"
             }
         else:
