@@ -57,6 +57,7 @@ def get_hash(url):
 def clean_url(url):
     url = url.rstrip('/')
     url = url.split('www.')[-1] if 'www.' in url else url
+    url = url.replace('https://','').replace('http://','')
     return url
 
 router = APIRouter(lifespan=lifespan)
