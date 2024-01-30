@@ -3,7 +3,7 @@ import requests
 url = "http://localhost:8000/api/screenshots"
 
 data = {
-    'urls' : ['https://www.facebook.com/login','https://www.messenger.com/','https://lichess.org']
+    'urls' : ['https://www.facebook.com','https://www.messenger.com/','https://lichess.org']
 }
 
 response = requests.post(url, json=data)

@@ -4,14 +4,21 @@ from playwright.async_api import async_playwright
 from shot_scraper.cli import take_shot
 import os
 from contextlib import asynccontextmanager
-from pydantic import BaseModel
 from typing import List
 from redis import Redis
 import hashlib
+from pydantic import BaseModel
 
-
-class ScreenshotRequest(BaseModel):
+class ScreenshotsRequest(BaseModel):
     urls: List[str]
+
+class ScreenshotsResponse(BaseModel):
+    results: List[dict]
+
+class StatusResponse(BaseModel):
+    msg: str
+    download_url: str = None
+   
 
 redis = Redis(host="localhost", port="6379", db=0)
 
@@ -25,16 +32,21 @@ def lifespan(app: APIRouter):
     yield
     browser_instance.close()
 
+router = APIRouter(lifespan=lifespan)
+
+
 async def initialize_browser():
     global browser_instance
     p = await async_playwright().start()
     browser_instance = await p.chromium.launch()
+
 
 async def get_browser():
     global browser_instance
     if browser_instance is None:
         await initialize_browser()
     return browser_instance
+
 
 def check_bad_url(url):
     url_bad_return_count = redis.hget("black_list", url)
@@ -45,14 +57,13 @@ def check_bad_url(url):
         return False
     return True
 
+
 def get_hash(url):
     hash_object = hashlib.sha256()
-
     hash_object.update(url.encode("utf-8"))
-
     hashed_string = hash_object.hexdigest()
-
     return hashed_string[:16]
+
 
 def clean_url(url):
     url = url.rstrip('/')
@@ -60,15 +71,12 @@ def clean_url(url):
     url = url.replace('https://','').replace('http://','')
     return url
 
-router = APIRouter(lifespan=lifespan)
-
 
 async def take_screenshot(url):
     browser_instance = await get_browser()
     context = await browser_instance.new_context()
 
     name = get_hash(url)
-
     shot = {"url": url, "output":f"./static/screenshots/{name}.png"}
 
     try:
@@ -109,10 +117,11 @@ async def process_screenshots(req,urls: List[str], background_task=BackgroundTas
         background_task.add_task(take_screenshot, url)
         results.append({url: f'{download_url}'})
 
-    return results
+    return {"results": results}
 
-@router.post("/screenshots")
-async def bluk_screenshot(request: ScreenshotRequest, background_task: BackgroundTasks, req:Request):
+
+@router.post("/screenshots", response_model=ScreenshotsResponse)
+async def bluk_screenshot(request: ScreenshotsRequest, background_task: BackgroundTasks, req:Request):
 
     urls = request.urls
 
@@ -122,7 +131,6 @@ async def bluk_screenshot(request: ScreenshotRequest, background_task: Backgroun
     results = await process_screenshots(req, urls, background_task)
 
     return results
-
 
 
 @router.get("/download/{url:path}")
@@ -145,11 +153,14 @@ def download_screenshot(url: str = Path(..., description="URL")):
         )
     else:
         raise HTTPException(status_code=404, detail="Screenshot not found")
+    
 
-@router.get("/status/{url:path}")
+@router.get("/status/{url:path}", response_model=StatusResponse)
 def check_status(req: Request,url: str = Path(..., description="URL")):
 
     status = redis.get(url)
+    if status:
+        return {"msg": "URL is being processed"}
 
     url = clean_url(url)
     name = get_hash(url)
@@ -157,13 +168,13 @@ def check_status(req: Request,url: str = Path(..., description="URL")):
     screenshot_path = os.path.join(screenshots_dir, f"{name}.png")
     download_url = req.base_url.replace(path=f"api/download/{url}")
 
-    if not status:
-        if os.path.exists(screenshot_path):
-            return {
-                "msg": f"Screenshot for URL:{url} has already been taken",
-                "download_url": f"{download_url}"
-            }
-        else:
-            return {"msg": "URL has never been processed"}
-    else:
-        return {"msg": "URL is being processed"}
+    if not os.path.exists(screenshot_path):
+        return {"msg": "URL has never been processed"}
+        
+    return {
+            "msg": f"Screenshot for URL:{url} has already been taken",
+            "download_url": f"{download_url}"
+        }
+        
+    
+        
