@@ -7,17 +7,7 @@ from contextlib import asynccontextmanager
 from typing import List
 from redis import Redis
 import hashlib
-from pydantic import BaseModel
-
-class ScreenshotsRequest(BaseModel):
-    urls: List[str]
-
-class ScreenshotsResponse(BaseModel):
-    results: List[dict]
-
-class StatusResponse(BaseModel):
-    msg: str
-    download_url: str = None
+from app.models import ScreenshotsRequest, ScreenshotsResponse, StatusResponse
    
 
 redis = Redis(host="localhost", port="6379", db=0)
