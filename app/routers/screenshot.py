@@ -160,7 +160,7 @@ def check_status(req: Request,url: str = Path(..., description="URL")):
 
     status = redis.get(url)
     if status:
-        return {"msg": "URL is being processed"}
+        return {"msg": f"screenshot for url:{url} is being taken"}
 
     url = clean_url(url)
     name = get_hash(url)
@@ -169,10 +169,10 @@ def check_status(req: Request,url: str = Path(..., description="URL")):
     download_url = req.base_url.replace(path=f"api/download/{url}")
 
     if not os.path.exists(screenshot_path):
-        return {"msg": "URL has never been processed"}
+        return {"msg": f"screenshot for url:{url} has not been taken"}
         
     return {
-            "msg": f"Screenshot for URL:{url} has already been taken",
+            "msg": f"Screenshot for url:{url} has been taken",
             "download_url": f"{download_url}"
         }
         
