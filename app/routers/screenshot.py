@@ -50,6 +50,7 @@ def check_bad_url(url):
     return True
 
 
+
 def get_hash(url):
     hash_object = hashlib.sha256()
     hash_object.update(url.encode("utf-8"))
@@ -180,11 +181,11 @@ def download_screenshot(url: str = Path(..., description="URL")):
 @router.get("/status/{url:path}", response_model=StatusResponse)
 def check_status(req: Request,url: str = Path(..., description="URL")):
 
+    url = clean_url(url)
     status = redis.get(url)
     if status:
         return {"msg": f"screenshot for url:{url} is being taken"}
 
-    url = clean_url(url)
     redirected_url = redis.hget('redirected_urls',url)
     if redirected_url is not None:
         url = redirected_url.decode('utf-8')
