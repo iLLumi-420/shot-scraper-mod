@@ -50,7 +50,6 @@ def check_bad_url(url):
     return True
 
 
-
 def get_hash(url):
     hash_object = hashlib.sha256()
     hash_object.update(url.encode("utf-8"))
@@ -62,6 +61,12 @@ def clean_url(url):
     url = url.rstrip('/')
     url = url.split('www.')[-1] if 'www.' in url else url
     url = url.replace('https://','').replace('http://','')
+    return url
+
+def redirected_url(url):
+    redirected_url = redis.hget('redirected_urls',url)
+    if redirected_url is not None:
+        url = redirected_url.decode('utf-8')
     return url
 
 
@@ -88,6 +93,12 @@ async def get_final_url(url):
     except:
         print('Request failed')
         return 
+    
+def get_screenshot_path(name):
+    return os.path.join(screenshots_dir, f"{name}.png")
+
+def get_dwonload_url(req, url):
+    return req.base_url.replace(path=f"api/download/{url}")
 
 async def take_screenshot(url, name):
 
@@ -121,8 +132,8 @@ async def process_screenshots(req,urls: List[str], background_task=BackgroundTas
         url = clean_url(final_url)
         name = get_hash(url)
 
-        screenshot_path = os.path.join(screenshots_dir, f"{name}.png")
-        download_url = req.base_url.replace(path=f"api/download/{url}")
+        screenshot_path = get_screenshot_path(name)
+        download_url = get_dwonload_url(req, url)
 
         if os.path.exists(screenshot_path):
             results.append({url: f'{download_url}'})
@@ -156,12 +167,10 @@ async def bulk_screenshot(request: ScreenshotsRequest, background_task: Backgrou
 def download_screenshot(url: str = Path(..., description="URL")):
 
     url = clean_url(url)
-    redirected_url = redis.hget('redirected_urls',url)
-    if redirected_url is not None:
-        url = redirected_url.decode('utf-8')
+    url = redirected_url(url)
 
     name = get_hash(url)
-    screenshot_path = os.path.join(screenshots_dir, f"{name}.png")
+    screenshot_path = get_screenshot_path(name)
 
     if os.path.exists(screenshot_path):
         return FileResponse(
@@ -186,13 +195,11 @@ def check_status(req: Request,url: str = Path(..., description="URL")):
     if status:
         return {"msg": f"screenshot for url:{url} is being taken"}
 
-    redirected_url = redis.hget('redirected_urls',url)
-    if redirected_url is not None:
-        url = redirected_url.decode('utf-8')
+    url = redirected_url(url)
     name = get_hash(url)
 
-    screenshot_path = os.path.join(screenshots_dir, f"{name}.png")
-    download_url = req.base_url.replace(path=f"api/download/{url}")
+    screenshot_path = get_screenshot_path(name)
+    download_url = get_dwonload_url(url)
 
     if not os.path.exists(screenshot_path):
         return {"msg": f"screenshot for url:{url} has not been taken"}
