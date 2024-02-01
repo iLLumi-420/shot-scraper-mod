@@ -8,6 +8,8 @@ from typing import List
 from redis import Redis
 import hashlib
 from app.models import ScreenshotsRequest, ScreenshotsResponse, StatusResponse
+import requests
+from urllib.parse import urlparse, urljoin
    
 
 redis = Redis(host="localhost", port="6379", db=0)
@@ -62,11 +64,35 @@ def clean_url(url):
     return url
 
 
-async def take_screenshot(url):
+async def get_final_url(url):
+    try:
+        cleaned_url = clean_url(url)
+        existing_url = redis.hget('redirected_urls', cleaned_url)
+        if existing_url is not None:
+            return existing_url.decode('utf-8')
+        
+        parsed_url = urlparse(url)
+        if not parsed_url.scheme:
+            url = 'https://'+ url
+        response = requests.head(url, allow_redirects=True)
+        
+        url = clean_url(url)
+        final_url = clean_url(response.url)
+        if final_url == url:
+            return url
+        
+        redis.hset('redirected_urls', url, final_url)
+        return final_url 
+       
+    except:
+        print('Request failed')
+        return 
+
+async def take_screenshot(url, name):
+
     browser_instance = await get_browser()
     context = await browser_instance.new_context()
 
-    name = get_hash(url)
     shot = {"url": url, "output":f"./static/screenshots/{name}.png"}
 
     try:
@@ -88,8 +114,10 @@ async def take_screenshot(url):
 async def process_screenshots(req,urls: List[str], background_task=BackgroundTasks):
     results = []
     for url in urls:
-        
-        url = clean_url(url)
+
+        final_url = await get_final_url(url)
+
+        url = clean_url(final_url)
         name = get_hash(url)
 
         screenshot_path = os.path.join(screenshots_dir, f"{name}.png")
@@ -104,14 +132,14 @@ async def process_screenshots(req,urls: List[str], background_task=BackgroundTas
             results.append({url: 'Bad url'})
             continue
 
-        background_task.add_task(take_screenshot, url)
+        background_task.add_task(take_screenshot, url, name)
         results.append({url: f'{download_url}'})
 
     return {"results": results}
 
 
 @router.post("/screenshots", response_model=ScreenshotsResponse)
-async def bluk_screenshot(request: ScreenshotsRequest, background_task: BackgroundTasks, req:Request):
+async def bulk_screenshot(request: ScreenshotsRequest, background_task: BackgroundTasks, req:Request):
 
     urls = request.urls
 
@@ -127,6 +155,10 @@ async def bluk_screenshot(request: ScreenshotsRequest, background_task: Backgrou
 def download_screenshot(url: str = Path(..., description="URL")):
 
     url = clean_url(url)
+    redirected_url = redis.hget('redirected_urls',url)
+    if redirected_url is not None:
+        url = redirected_url.decode('utf-8')
+
     name = get_hash(url)
     screenshot_path = os.path.join(screenshots_dir, f"{name}.png")
 
@@ -153,6 +185,9 @@ def check_status(req: Request,url: str = Path(..., description="URL")):
         return {"msg": f"screenshot for url:{url} is being taken"}
 
     url = clean_url(url)
+    redirected_url = redis.hget('redirected_urls',url)
+    if redirected_url is not None:
+        url = redirected_url.decode('utf-8')
     name = get_hash(url)
 
     screenshot_path = os.path.join(screenshots_dir, f"{name}.png")
