@@ -174,7 +174,7 @@ def download_screenshot(url: str = Path(..., description="URL")):
             },
         )
     else:
-        raise HTTPException(status_code=404, detail="Screenshot not found")
+        raise HTTPException(status_code=404, detail="Screenshot not saved")
     
 
 @router.get("/status/{url:path}", response_model=StatusResponse)
