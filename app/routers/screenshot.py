@@ -157,11 +157,6 @@ async def bulk_screenshot(screenshot_request: ScreenshotsRequest, request: Reque
 
     return {'results': results}
 
-   
-
-
-
-
 
 @router.get("/download/{url:path}")
 def download_screenshot(url: str = Path(..., description="URL")):
