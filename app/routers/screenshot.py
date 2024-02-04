@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from typing import List
 from redis import Redis
 import hashlib
-from app.models import ScreenshotsRequest, ScreenshotsResponse, StatusResponse
+from app.models import ScreenshotsRequest,StatusResponse
 import requests
 from urllib.parse import urlparse, urljoin
 import asyncio
@@ -107,18 +107,16 @@ async def take_screenshot(url):
             redis.hincrby("black_list", url, 1)
         else:
             redis.hset("black_list", url, 1)
-        return 
-      
+        return {}
 
-async def process_screenshots(req,urls: List[str]):
-    results = []
+
+async def get_tasks_and_results(req, urls):
     tasks = []
+    results = []
     for url in urls:
-
         url = clean_url(url)
         url = redirected_url(url)
         name = get_hash(url)
-        
 
         screenshot_path = get_screenshot_path(name)
         download_url = get_download_url(req, url)
@@ -138,19 +136,31 @@ async def process_screenshots(req,urls: List[str]):
     return tasks, results
 
 
-@router.post("/screenshots", response_model=ScreenshotsResponse)
-async def bulk_screenshot(screenshot_request: ScreenshotsRequest, request:Request):
+async def process_task_chunks(tasks, urls_length):
+    chunk_size = 5
+    for i in range(0, urls_length, chunk_size):
+        chunk_tasks = tasks[i:i+chunk_size]
+        await asyncio.gather(*chunk_tasks)
+
+
+@router.post("/screenshots")
+async def bulk_screenshot(screenshot_request: ScreenshotsRequest, request: Request, background_task:BackgroundTasks):
     redis.hdel('black_list', 'reddit.com')
     urls = screenshot_request.urls
 
     if not urls:
         raise HTTPException(status_code=400, detail="No urls received")
+
+    tasks, results = await get_tasks_and_results(request, urls)
     
-    tasks, results = await process_screenshots(request, urls)
-    
-    asyncio.ensure_future(asyncio.gather(*tasks))
+    background_task.add_task(process_task_chunks, tasks, len(urls))
 
     return {'results': results}
+
+   
+
+
+
 
 
 @router.get("/download/{url:path}")
