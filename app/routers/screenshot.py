@@ -1,7 +1,7 @@
-from fastapi import APIRouter, HTTPException, Request, BackgroundTasks, Path
+from fastapi import APIRouter, HTTPException, Request, BackgroundTasks, Path, Query
 from starlette.responses import FileResponse
 from playwright.async_api import async_playwright
-from shot_scraper.cli import take_shot
+# from shot_scraper.cli import take_shot
 import os
 from contextlib import asynccontextmanager
 from typing import List
@@ -11,11 +11,18 @@ from app.models import ScreenshotsRequest,StatusResponse
 import requests
 from urllib.parse import urlparse, urljoin
 import asyncio
-   
+from app.shot_scraper import get_screenshot_and_html
+from zipfile import ZipFile
 
 redis = Redis(host="localhost", port="6379", db=0)
 
-screenshots_dir = os.path.abspath("./static/screenshots")
+
+def ensure_directory_exists(directory):
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+
+resources_dir = os.path.abspath("./static/resources")
+ensure_directory_exists(resources_dir)
 browser_instance = None
 
 
@@ -71,8 +78,10 @@ def redirected_url(url):
     return url
 
     
-def get_screenshot_path(name):
-    return os.path.join(screenshots_dir, f"{name}.png")
+def get_path(name, html=False):
+    if html:
+        return  os.path.join(resources_dir, f"{name}.html")
+    return os.path.join(resources_dir, f"{name}.png")
 
 def get_download_url(req, url):
     return req.base_url.replace(path=f"api/download/{url}")
@@ -86,7 +95,7 @@ async def take_screenshot(url):
 
     try:
         redis.set(url, 1)
-        response, response_url = await take_shot(shot=shot, context_or_page=context, fail=True, return_bytes=True)
+        screenshot_bytes, response_url, response_html = await get_screenshot_and_html(context=context, shot=shot)
         await context.close()
         redis.delete(url)
 
@@ -96,9 +105,12 @@ async def take_screenshot(url):
             print('redirected url saved', url, response_url)
 
         name = get_hash(response_url)
-        screenshot_path = get_screenshot_path(name)
+        screenshot_path = get_path(name)
+        html_path = get_path(name, html=True)
         with open(screenshot_path, 'wb') as file:
-            file.write(response)
+            file.write(screenshot_bytes)
+        with open(html_path, 'w') as file:
+            file.write(response_html)
         
     
     except Exception as e:
@@ -118,7 +130,7 @@ async def get_tasks_and_results(req, urls):
         url = redirected_url(url)
         name = get_hash(url)
 
-        screenshot_path = get_screenshot_path(name)
+        screenshot_path = get_path(name)
         download_url = get_download_url(req, url)
 
         if os.path.exists(screenshot_path):
@@ -158,28 +170,7 @@ async def bulk_screenshot(screenshot_request: ScreenshotsRequest, request: Reque
     return {'results': results}
 
 
-@router.get("/download/{url:path}")
-def download_screenshot(url: str = Path(..., description="URL")):
 
-    url = clean_url(url)
-    url = redirected_url(url)
-
-    name = get_hash(url)
-    screenshot_path = get_screenshot_path(name)
-
-    if os.path.exists(screenshot_path):
-        return FileResponse(
-            path=screenshot_path,
-            media_type="image/png",
-            headers={
-                "Content-Disposition": f"attachment; filename={name}.png",
-                "Cache-Control": "no-cache",
-                "Pragma": "no-cache",
-                "Expires": "0",
-            },
-        )
-    else:
-        raise HTTPException(status_code=404, detail="Screenshot not saved")
     
 
 @router.get("/status/{url:path}", response_model=StatusResponse)
@@ -193,7 +184,7 @@ def check_status(req: Request,url: str = Path(..., description="URL")):
     url = redirected_url(url)
     name = get_hash(url)
 
-    screenshot_path = get_screenshot_path(name)
+    screenshot_path = get_path(name)
     download_url = get_download_url(url)
 
     if not os.path.exists(screenshot_path):
