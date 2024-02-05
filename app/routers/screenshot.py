@@ -170,7 +170,68 @@ async def bulk_screenshot(screenshot_request: ScreenshotsRequest, request: Reque
     return {'results': results}
 
 
+@router.get("/download/{url:path}")
+def download_screenshot(
+    url: str = Path(..., description="URL"),
+    html: bool = Query(True, description="Download HTML file (default: True)"),
+    ss: bool = Query(True, description="Download screenshot (default: True)")
+):
+    url = clean_url(url)
+    url = redirected_url(url)
 
+    name = get_hash(url)
+    screenshot_path = get_path(name)
+    html_path = get_path(name, html=True)
+
+    if not ss and not html:
+        raise HTTPException(status_code=400, detail="Specify either 'ss' or 'html' parameter")
+
+    if ss and html:
+        zip_filename = f"{name}_files.zip"
+
+        with ZipFile(zip_filename, 'w') as zip_file:
+            if os.path.exists(screenshot_path):
+                zip_file.write(screenshot_path, arcname=f"{name}.png")
+
+            if os.path.exists(html_path):
+                zip_file.write(html_path, arcname=f"{name}.html")
+
+        return FileResponse(
+            path=zip_filename,
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": f"attachment; filename={zip_filename}",
+                "Cache-Control": "no-cache",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            },
+        )
+
+    elif ss and os.path.exists(screenshot_path):
+        return FileResponse(
+            path=screenshot_path,
+            media_type="image/png",
+            headers={
+                "Content-Disposition": f"attachment; filename={name}.png",
+                "Cache-Control": "no-cache",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            },
+        )
+
+    elif html and os.path.exists(html_path):
+        return FileResponse(
+            path=html_path,
+            media_type="text/html",
+            headers={
+                "Content-Disposition": f"attachment; filename={name}.html",
+                "Cache-Control": "no-cache",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            },
+        )
+
+    raise HTTPException(status_code=404, detail="File not found")
     
 
 @router.get("/status/{url:path}", response_model=StatusResponse)
