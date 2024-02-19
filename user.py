@@ -1,22 +1,22 @@
 import requests
 
-url = "http://localhost:8000/api/screenshots"
+url = "http://localhost:8000/api/save"
 
 data = {
     'urls' : [
     "https://www.wikipedia.org",
     "https://www.google.com",
     "https://www.facebook.com",
-    # "https://www.twitter.com",
-    # "https://www.instagram.com",
-    # "https://www.linkedin.com",
-    # "https://www.reddit.com",
-    # "https://www.github.com",
-    # "https://www.stackoverflow.com",
-    # "https://www.apple.com",
-    # "https://www.microsoft.com",
-    # "https://www.amazon.com",
-    # "https://www.netflix.com",
+    "https://www.twitter.com",
+    "https://www.instagram.com",
+    "https://www.linkedin.com",
+    "https://www.reddit.com",
+    "https://www.github.com",
+    "https://www.stackoverflow.com",
+    "https://www.apple.com",
+    "https://www.microsoft.com",
+    "https://www.amazon.com",
+    "https://www.netflix.com",
     # "https://www.youtube.com",
     # "https://www.spotify.com",
     # "https://www.nytimes.com",

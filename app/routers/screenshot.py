@@ -94,6 +94,7 @@ async def take_screenshot(url):
     shot = {"url": url}
 
     try:
+        print(url)
         redis.set(url, 1)
         screenshot_bytes, response_url, response_html = await get_screenshot_and_html(context=context, shot=shot)
         await context.close()
@@ -107,6 +108,9 @@ async def take_screenshot(url):
         name = get_hash(response_url)
         screenshot_path = get_path(name)
         html_path = get_path(name, html=True)
+
+
+
         with open(screenshot_path, 'wb') as file:
             file.write(screenshot_bytes)
         with open(html_path, 'w') as file:
@@ -149,15 +153,15 @@ async def get_tasks_and_results(req, urls):
 
 
 async def process_task_chunks(tasks, urls_length):
-    chunk_size = 5
+    chunk_size = 10
     for i in range(0, urls_length, chunk_size):
         chunk_tasks = tasks[i:i+chunk_size]
         await asyncio.gather(*chunk_tasks)
 
 
-@router.post("/screenshots")
+@router.post("/save")
 async def bulk_screenshot(screenshot_request: ScreenshotsRequest, request: Request, background_task:BackgroundTasks):
-    redis.hdel('black_list', 'reddit.com')
+
     urls = screenshot_request.urls
 
     if not urls:
