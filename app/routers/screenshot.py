@@ -16,6 +16,20 @@ redis = Redis(host="localhost", port="6379", db=0)
 browser_instance = None
 
 
+
+async def initialize_browser():
+    global browser_instance
+    p = await async_playwright().start()
+    browser_instance = await p.chromium.launch()
+
+
+async def get_browser():
+    global browser_instance
+    if browser_instance is None:
+        await initialize_browser()
+    return browser_instance
+
+
 @asynccontextmanager
 def lifespan(app: APIRouter):
     initialize_browser()
@@ -26,7 +40,10 @@ router = APIRouter(lifespan=lifespan)
 
 
 
-async def take_screenshot(url):
+async def take_screenshot(url, retry_count = 0):
+
+    if retry_count > 2:
+        return None
 
     browser_instance = await get_browser()
     context = await browser_instance.new_context()
@@ -63,7 +80,8 @@ async def take_screenshot(url):
             redis.hincrby("black_list", url, 1)
         else:
             redis.hset("black_list", url, 1)
-        return {}
+        print('retrying', url)
+        return await take_screenshot(url, retry_count+1)
 
 
 async def get_tasks_and_results(req, urls):
@@ -73,6 +91,8 @@ async def get_tasks_and_results(req, urls):
         url = clean_url(url)
         url = redirected_url(redis, url)
         name = get_hash(url)
+        
+        redis.hdel('black_list', url)
 
         screenshot_path = get_path(name)
         download_url = get_download_url(req, url)

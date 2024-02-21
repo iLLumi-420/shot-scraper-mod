@@ -9,21 +9,6 @@ def ensure_directory_exists(directory):
     if not os.path.exists(directory):
         os.makedirs(directory)
 
-async def initialize_browser():
-    global browser_instance
-    p = await async_playwright().start()
-    browser_instance = await p.chromium.launch()
-
-
-async def get_browser():
-    global browser_instance
-    if browser_instance is None:
-        await initialize_browser()
-    return browser_instance
-
-
-
-
 
 def get_hash(url):
     hash_object = hashlib.sha256()
@@ -43,7 +28,7 @@ def check_bad_url(redis, url):
     if not url_bad_return_count:
         return False
     url_bad_return_count = int(url_bad_return_count.decode("utf-8"))
-    if url_bad_return_count < 4:
+    if url_bad_return_count < 3:
         return False
     return True
 
@@ -54,7 +39,7 @@ def redirected_url(redis, url):
     return url
 
     
-def get_path(resources_dir,name, html=False):
+def get_path(name, html=False):
     resources_dir = os.path.abspath("./static/resources")
     ensure_directory_exists(resources_dir)
     if html:
